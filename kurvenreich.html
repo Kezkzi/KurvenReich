@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Kurvenreich — Scenic Routes</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --cream: #F5F0E8;
+  --ink: #1A1814;
+  --moss: #4A5E3A;
+  --moss-light: #6B8552;
+  --rust: #C4623A;
+  --rust-light: #E07A52;
+  --parchment: #EDE8DC;
+  --shadow: rgba(26,24,20,0.14);
+  --glass: rgba(245,240,232,0.92);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--ink);
+  color: var(--cream);
+  position: fixed;
+  inset: 0;
+}
+
+/* ── MAP ── */
+#map {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* Leaflet custom overrides */
+.leaflet-tile-pane { filter: sepia(20%) saturate(85%) brightness(102%); }
+.leaflet-control-zoom { display: none; }
+.leaflet-control-attribution {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px !important;
+  background: rgba(245,240,232,0.7) !important;
+  backdrop-filter: blur(4px);
+  border-radius: 6px 0 0 0 !important;
+  padding: 3px 6px !important;
+}
+
+/* ── HEADER ── */
+.header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 400;
+  padding: env(safe-area-inset-top, 44px) 20px 0;
+  background: linear-gradient(to bottom, rgba(26,24,20,0.88) 0%, transparent 100%);
+  pointer-events: none;
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  pointer-events: auto;
+}
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cream);
+  line-height: 1;
+  letter-spacing: -0.3px;
+}
+.logo em { font-style: italic; color: var(--rust-light); }
+.logo-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 300;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.45);
+  margin-top: 3px;
+}
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: rgba(74,94,58,0.7);
+  border: 1px solid rgba(74,94,58,0.9);
+  border-radius: 100px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: rgba(245,240,232,0.85);
+}
+.badge-dot {
+  width: 6px; height: 6px;
+  background: #7BC47F;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50% { opacity:0.6; transform:scale(0.8); }
+}
+
+
+/* ── BOTTOM PANEL ── */
+.bottom-panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 400;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(26,24,20,0.09);
+  border-radius: 24px 24px 0 0;
+  padding: 16px 20px env(safe-area-inset-bottom, 20px);
+  box-shadow: 0 -8px 40px var(--shadow);
+  transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
+}
+.bottom-panel.hidden { transform: translateY(100%); }
+.drag-handle {
+  width: 36px; height: 4px;
+  background: rgba(26,24,20,0.18);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+/* Inputs */
+.input-group { position: relative; margin-bottom: 10px; }
+.input-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.input-label.dest { color: var(--moss); }
+.input-label::before {
+  content: '';
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.search-input {
+  width: 100%;
+  padding: 13px 40px 13px 14px;
+  background: rgba(26,24,20,0.055);
+  border: 1.5px solid rgba(26,24,20,0.1);
+  border-radius: 13px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  -webkit-appearance: none;
+}
+.search-input:focus {
+  border-color: var(--moss);
+  background: rgba(26,24,20,0.035);
+}
+.search-input::placeholder { color: rgba(26,24,20,0.3); }
+.input-clear {
+  position: absolute;
+  right: 10px; bottom: 11px;
+  width: 22px; height: 22px;
+  background: rgba(26,24,20,0.1);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(26,24,20,0.5);
+}
+.input-clear.visible { display: flex; }
+
+.route-connector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 2px 9px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: rgba(26,24,20,0.3);
+}
+.route-connector::before {
+  content: '';
+  display: block;
+  width: 1.5px;
+  height: 16px;
+  background: linear-gradient(to bottom, var(--rust), var(--moss));
+  border-radius: 1px;
+  margin-left: 2px;
+}
+
+/* Preference chips */
+.prefs-row {
+  display: flex;
+  gap: 7px;
+  margin: 12px 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.prefs-row::-webkit-scrollbar { display: none; }
+.pref-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 100px;
+  border: 1.5px solid rgba(26,24,20,0.13);
+  background: transparent;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(26,24,20,0.55);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.18s;
+  flex-shrink: 0;
+  -webkit-appearance: none;
+}
+.pref-chip.active {
+  border-color: var(--moss);
+  background: var(--moss);
+  color: var(--cream);
+}
+.pref-chip .ci { font-size: 13px; }
+
+/* Go button */
+.go-btn {
+  width: 100%;
+  padding: 15px 20px;
+  background: var(--ink);
+  color: var(--cream);
+  border: none;
+  border-radius: 15px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.go-btn:active { transform: scale(0.97); opacity: 0.9; }
+.go-btn-left { display: flex; flex-direction: column; align-items: flex-start; }
+.go-btn-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 700;
+}
+.go-btn-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 300;
+  letter-spacing: 1.5px;
+  color: rgba(245,240,232,0.4);
+  margin-top: 2px;
+}
+.go-arrow {
+  width: 38px; height: 38px;
+  background: var(--rust);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+/* ── AUTOCOMPLETE ── */
+.autocomplete-list {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0; right: 0;
+  background: white;
+  border: 1.5px solid rgba(26,24,20,0.1);
+  border-radius: 14px;
+  box-shadow: 0 -4px 24px var(--shadow);
+  z-index: 600;
+  max-height: 220px;
+  overflow-y: auto;
+  display: none;
+  -webkit-overflow-scrolling: touch;
+}
+.autocomplete-list.open { display: block; }
+.ac-item {
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(26,24,20,0.05);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  transition: background 0.12s;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:active { background: rgba(74,94,58,0.07); }
+.ac-icon { font-size: 13px; opacity: 0.45; flex-shrink: 0; margin-top: 1px; }
+.ac-main { font-weight: 500; display: block; line-height: 1.3; }
+.ac-sub { font-size: 11px; color: rgba(26,24,20,0.38); display: block; margin-top: 1px; }
+
+/* ── RESULTS PANEL ── */
+.results-panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 410;
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(26,24,20,0.09);
+  border-radius: 24px 24px 0 0;
+  padding: 16px 20px env(safe-area-inset-bottom, 20px);
+  box-shadow: 0 -8px 40px var(--shadow);
+  transform: translateY(100%);
+  transition: transform 0.5s cubic-bezier(0.32,0.72,0,1);
+  max-height: 68dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.results-panel.visible { transform: translateY(0); }
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.results-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.results-title em { font-style: italic; color: var(--moss); }
+.close-btn {
+  width: 30px; height: 30px;
+  background: rgba(26,24,20,0.07);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Route cards */
+.route-card {
+  background: rgba(26,24,20,0.045);
+  border: 1.5px solid rgba(26,24,20,0.08);
+  border-radius: 17px;
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.route-card.selected {
+  border-color: var(--moss);
+  background: rgba(74,94,58,0.07);
+}
+.scenic-tag {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--cream);
+  background: var(--rust);
+  padding: 3px 8px;
+  border-radius: 100px;
+}
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 11px;
+}
+.card-icon {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+  background: var(--moss);
+}
+.route-card.alt .card-icon { background: rgba(26,24,20,0.09); }
+.card-meta { flex: 1; min-width: 0; }
+.card-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.card-desc { font-size: 11px; color: rgba(26,24,20,0.45); line-height: 1.4; }
+.card-stats {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  background: rgba(26,24,20,0.05);
+  border-radius: 100px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: rgba(26,24,20,0.5);
+}
+.stat strong { color: var(--ink); font-weight: 500; }
+
+.score-section {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(26,24,20,0.07);
+}
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: rgba(26,24,20,0.38);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.score-track {
+  height: 4px;
+  background: rgba(26,24,20,0.07);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.score-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--moss), var(--rust-light));
+  transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  width: 0;
+}
+
+.nav-btn {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--moss);
+  color: var(--cream);
+  border: none;
+  border-radius: 13px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.nav-btn:active { opacity: 0.85; transform: scale(0.98); }
+
+/* ── LOADING ── */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  background: rgba(26,24,20,0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.loading-overlay.on { opacity: 1; pointer-events: auto; }
+.spinner {
+  width: 42px; height: 42px;
+  border: 2.5px solid rgba(245,240,232,0.15);
+  border-top-color: var(--rust-light);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  color: rgba(245,240,232,0.55);
+  text-transform: uppercase;
+}
+
+/* ── TOAST ── */
+.toast {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 44px) + 68px);
+  left: 16px; right: 16px;
+  z-index: 500;
+  background: #B03222;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 13px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(176,50,34,0.4);
+  transform: translateY(-130%);
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  line-height: 1.4;
+}
+.toast.on { transform: translateY(0); }
+
+/* ── LOCATE BUTTON ── */
+.locate-btn {
+  position: absolute;
+  right: 16px;
+  z-index: 400;
+  width: 42px; height: 42px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(26,24,20,0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px var(--shadow);
+  transition: transform 0.15s;
+}
+.locate-btn:active { transform: scale(0.93); }
+#locateBtn { bottom: 220px; }
+
+/* Leaflet route line custom */
+.scenic-polyline { stroke-dasharray: none; }
+</style>
+</head>
+<body>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div>
+      <div class="logo">Kurven<em>reich</em></div>
+      <div class="logo-sub">Scenic Routes</div>
+    </div>
+    <div class="header-badge">
+      <div class="badge-dot"></div>
+      FREE · OSM
+    </div>
+  </div>
+</div>
+
+<!-- LOCATE BUTTON -->
+<button class="locate-btn" id="locateBtn" onclick="locateMe()" title="My location">📍</button>
+
+<!-- SEARCH PANEL -->
+<div class="bottom-panel" id="searchPanel">
+  <div class="drag-handle"></div>
+
+  <div class="input-group">
+    <div class="input-label">From</div>
+    <input class="search-input" id="originInput" placeholder="Starting point..." autocomplete="off">
+    <button class="input-clear" id="originClear" onclick="clearInput('origin')">✕</button>
+    <div class="autocomplete-list" id="originAC"></div>
+  </div>
+
+  <div class="route-connector">via Landstraßen</div>
+
+  <div class="input-group">
+    <div class="input-label dest">To</div>
+    <input class="search-input" id="destInput" placeholder="Destination..." autocomplete="off">
+    <button class="input-clear" id="destClear" onclick="clearInput('dest')">✕</button>
+    <div class="autocomplete-list" id="destAC"></div>
+  </div>
+
+  <div class="prefs-row">
+    <button class="pref-chip active" data-pref="no_highways" onclick="togglePref(this)">
+      <span class="ci">🚫</span> No Autobahn
+    </button>
+    <button class="pref-chip active" data-pref="max_curves" onclick="togglePref(this)">
+      <span class="ci">〰️</span> Max Curves
+    </button>
+    <button class="pref-chip" data-pref="avoid_tollways" onclick="togglePref(this)">
+      <span class="ci">💶</span> No Tolls
+    </button>
+    <button class="pref-chip" data-pref="scenic" onclick="togglePref(this)">
+      <span class="ci">🏔️</span> Scenic
+    </button>
+  </div>
+
+  <button class="go-btn" onclick="findRoutes()">
+    <div class="go-btn-left">
+      <span class="go-btn-title">Find Scenic Route</span>
+      <span class="go-btn-sub">AVOID HIGHWAYS · PREFER CURVES</span>
+    </div>
+    <div class="go-arrow">→</div>
+  </button>
+</div>
+
+<!-- RESULTS PANEL -->
+<div class="results-panel" id="resultsPanel">
+  <div class="drag-handle"></div>
+  <div class="results-header">
+    <div class="results-title">Your <em>Routes</em></div>
+    <button class="close-btn" onclick="closeResults()">✕</button>
+  </div>
+  <div id="routeCards"></div>
+  <button class="nav-btn" id="navBtn" onclick="openNavigation()">
+    🧭 Open Navigation
+  </button>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loader">
+  <div class="spinner"></div>
+  <div class="loading-text">Finding curves...</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────
+let orsKey = '';
+let map, routeLayers = [], markers = [];
+let originCoord = null, destCoord = null;
+let originName = '', destName = '';
+let selectedRouteIdx = 0;
+let computedRoutes = [];
+let prefs = { no_highways: true, max_curves: true, avoid_tollways: false, scenic: false };
+let acDebounce = {};
+
+// ─── INIT ─────────────────────────────────────────────────────────
+
+function initMap() {
+  map = L.map('map', {
+    zoomControl: false,
+    attributionControl: true,
+  }).setView([47.8, 11.5], 8); // Bavaria default
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> · <a href="https://openrouteservice.org">ORS</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Force Leaflet to recalc dimensions after DOM paint
+  setTimeout(() => map.invalidateSize(), 100);
+
+  setupAutocomplete('originInput', 'originAC', 'originClear', true);
+  setupAutocomplete('destInput', 'destAC', 'destClear', false);
+
+  // Try geolocation
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      map.setView([lat, lng], 10);
+      originCoord = [lat, lng];
+      originName = 'Current Location';
+      document.getElementById('originInput').value = 'Current Location';
+      document.getElementById('originClear').classList.add('visible');
+    }, () => {});
+  }
+}
+
+// ─── GEOLOCATION ──────────────────────────────────────────────────
+function locateMe() {
+  if (!map) return;
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    map.flyTo([lat, lng], 12, { duration: 1.2 });
+    originCoord = [lat, lng];
+    originName = 'Current Location';
+    document.getElementById('originInput').value = 'Current Location';
+    document.getElementById('originClear').classList.add('visible');
+  }, () => showToast('Could not get your location'));
+}
+
+// ─── AUTOCOMPLETE (Nominatim) ──────────────────────────────────────
+function setupAutocomplete(inputId, listId, clearBtnId, isOrigin) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const clearBtn = document.getElementById(clearBtnId);
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    clearBtn.classList.toggle('visible', val.length > 0);
+    if (!val || val.length < 2) { list.classList.remove('open'); return; }
+
+    clearTimeout(acDebounce[inputId]);
+    acDebounce[inputId] = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&limit=5&countrycodes=de,at,ch&accept-language=de,en`,
+          { headers: { 'Accept-Language': 'de,en' } }
+        );
+        const data = await res.json();
+        if (!data.length) { list.classList.remove('open'); return; }
+
+        list.innerHTML = data.map(place => {
+          const parts = place.display_name.split(',');
+          const main = parts[0].trim();
+          const sub = parts.slice(1, 3).join(',').trim();
+          return `<div class="ac-item" data-lat="${place.lat}" data-lon="${place.lon}" data-name="${escQ(place.display_name)}">
+            <span class="ac-icon">📍</span>
+            <div><span class="ac-main">${escH(main)}</span><span class="ac-sub">${escH(sub)}</span></div>
+          </div>`;
+        }).join('');
+
+        list.querySelectorAll('.ac-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const lat = parseFloat(item.dataset.lat);
+            const lon = parseFloat(item.dataset.lon);
+            const name = item.dataset.name;
+            const main = name.split(',')[0].trim();
+            input.value = main;
+            list.classList.remove('open');
+            clearBtn.classList.add('visible');
+            if (isOrigin) {
+              originCoord = [lat, lon];
+              originName = main;
+            } else {
+              destCoord = [lat, lon];
+              destName = main;
+            }
+          });
+        });
+
+        list.classList.add('open');
+      } catch(e) { list.classList.remove('open'); }
+    }, 320);
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 180));
+}
+
+function clearInput(which) {
+  if (which === 'origin') {
+    document.getElementById('originInput').value = '';
+    document.getElementById('originClear').classList.remove('visible');
+    originCoord = null; originName = '';
+  } else {
+    document.getElementById('destInput').value = '';
+    document.getElementById('destClear').classList.remove('visible');
+    destCoord = null; destName = '';
+  }
+}
+
+// ─── PREFS ────────────────────────────────────────────────────────
+function togglePref(btn) {
+  const k = btn.dataset.pref;
+  prefs[k] = !prefs[k];
+  btn.classList.toggle('active', prefs[k]);
+}
+
+// ─── ROUTING ──────────────────────────────────────────────────────
+async function findRoutes() {
+  if (!originCoord) { showToast('Please enter a starting point'); return; }
+  if (!destCoord) { showToast('Please enter a destination'); return; }
+
+  setLoading(true);
+  clearMap();
+
+  try {
+    // Build ORS avoid_features list
+    const avoidFeatures = [];
+    if (prefs.no_highways) avoidFeatures.push('highways');
+    if (prefs.avoid_tollways) avoidFeatures.push('tollways');
+    // Always avoid ferries for a road trip app
+    // avoidFeatures.push('ferries');
+
+    // Build extra options for scenic / curvy routing
+    // ORS "extra_info" gives us surface, waytypes, steepness, etc.
+    const extraInfo = ['surface', 'waytype', 'steepness'];
+    if (prefs.scenic) extraInfo.push('waycategory');
+
+    const body = {
+      coordinates: [
+        [originCoord[1], originCoord[0]],
+        [destCoord[1], destCoord[0]]
+      ],
+      profile: 'driving-car',
+      format: 'geojson',
+      extra_info: extraInfo,
+      preference: prefs.max_curves ? 'shortest' : 'recommended',
+      options: {
+        avoid_features: avoidFeatures.length ? avoidFeatures : undefined,
+        // route_attribute: ['detourfactor'] // extra data
+      },
+      alternative_routes: {
+        target_count: 3,
+        weight_factor: 1.6,
+        share_factor: 0.6
+      },
+      instructions: true,
+      elevation: true,
+    };
+
+    // Remove undefined keys
+    if (!body.options.avoid_features) delete body.options.avoid_features;
+    if (!avoidFeatures.length) delete body.options;
+
+    const res = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+      method: 'POST',
+      headers: {
+        'Authorization': orsKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || `API error ${res.status}`;
+      throw new Error(msg);
+    }
+
+    const data = await res.json();
+    const features = data.features;
+
+    if (!features || !features.length) {
+      throw new Error('No routes found');
+    }
+
+    computedRoutes = features;
+    selectedRouteIdx = 0;
+    drawRoutes(features);
+    showResults(features);
+
+  } catch (err) {
+    showToast(err.message.includes('quota') ? 'Daily quota exceeded. Try again tomorrow (2000 routes/day free).' : err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── SCENIC SCORE ─────────────────────────────────────────────────
+// ORS avgspeed value IDs → km/h (from ORS docs encoding table)
+// Values are encoded as integers 0–255 mapped to actual speeds.
+// For driving-car: encoded value * 1 ≈ km/h (ORS stores actual avg speed directly)
+function calcScenicScore(feature) {
+  const props = feature.properties.summary;
+  const dist = props.distance; // meters
+  const seg = feature.properties.segments?.[0];
+  if (!dist) return 50;
+
+  // Sinuosity: actual distance vs straight-line
+  const coords = feature.geometry.coordinates;
+  const start = coords[0];
+  const end = coords[coords.length - 1];
+  const straightLine = haversineDist(start[1], start[0], end[1], end[0]);
+  const sinuosity = dist / Math.max(straightLine, 1);
+
+  // Turns from step count (more steps = more direction changes)
+  const stepCount = seg?.steps?.length || 10;
+  const turnsPerKm = stepCount / (dist / 1000);
+
+  // Penalty: motorway/trunk waytypes (type 3 = motorway, 4 = trunk)
+  let highwayPenalty = 0;
+  const waytypes = feature.properties.extras?.waytype;
+  if (waytypes?.values) {
+    waytypes.values.forEach(([from, to, type]) => {
+      if (type === 3 || type === 4) highwayPenalty += (to - from) * 0.15;
+    });
+  }
+
+  // Penalty: slow city streets (waytype 6=residential, 7=living_street, 8=service)
+  // Bonus: Landstraße-class roads (waytype 1=secondary, 2=primary — open road, higher limits)
+  // ORS waytype IDs: 0=unknown,1=secondary,2=primary,3=motorway,4=trunk,5=tertiary,6=residential,7=living_street,8=service
+  let slowStreetPenalty = 0;
+  let landstrassBonus = 0;
+  if (waytypes?.values) {
+    waytypes.values.forEach(([from, to, type]) => {
+      const segLen = to - from;
+      if (type === 6 || type === 7 || type === 8) {
+        // Residential / living street / service — typically 30 km/h, boring city driving
+        slowStreetPenalty += segLen * 0.35;
+      } else if (type === 1 || type === 5) {
+        // Secondary / tertiary — classic Landstraße, 70–100 km/h sweet spot
+        landstrassBonus += segLen * 0.1;
+      }
+    });
+  }
+
+  // Remove old AvgSpeed reference (now unused)
+  const avgspeed = null;
+
+  // Steepness variety (elevation variety = more interesting terrain)
+  let elevationBonus = 0;
+  const steepness = feature.properties.extras?.steepness;
+  if (steepness?.values) {
+    const grades = new Set(steepness.values.map(v => v[2]));
+    elevationBonus = Math.min(grades.size * 3, 15);
+  }
+
+  let score = 20
+    + Math.min((sinuosity - 1) * 40, 35)      // sinuosity bonus (up to 35)
+    + Math.min(turnsPerKm * 2, 20)             // turns per km (up to 20)
+    + elevationBonus                            // elevation variety (up to 15)
+    + Math.min(landstrassBonus, 20)            // Landstraße road type bonus (up to 20)
+    - highwayPenalty                            // motorway penalty
+    - slowStreetPenalty;                        // residential / 30-zone penalty
+
+  return Math.min(Math.max(Math.round(score), 5), 99);
+}
+
+function haversineDist(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─── CURVE COUNTER ────────────────────────────────────────────────
+// Calculates the bearing between two lat/lng points in degrees
+function bearing(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const rlat1 = lat1 * Math.PI / 180;
+  const rlat2 = lat2 * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(rlat2);
+  const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Counts meaningful curves by measuring heading changes along the route geometry.
+// A "curve" is a sustained heading change of >15° that isn't just GPS noise.
+// We smooth with a small window to ignore micro-jitter in the coordinate data.
+function countCurves(feature) {
+  const coords = feature.geometry.coordinates; // [lng, lat]
+  if (coords.length < 3) return 0;
+
+  const CURVE_THRESHOLD = 15;   // degrees — minimum heading change to count as a curve
+  const MIN_SEGMENT_M   = 20;   // ignore tiny segments (GPS noise)
+
+  let curves = 0;
+  let inCurve = false;
+  let accumulatedAngle = 0;
+  let prevBearing = null;
+
+  for (let i = 1; i < coords.length - 1; i++) {
+    const [lon1, lat1] = coords[i - 1];
+    const [lon2, lat2] = coords[i];
+    const [lon3, lat3] = coords[i + 1];
+
+    // Skip tiny segments
+    const segLen = haversineDist(lat1, lon1, lat2, lon2);
+    if (segLen < MIN_SEGMENT_M) continue;
+
+    const b1 = bearing(lat1, lon1, lat2, lon2);
+    const b2 = bearing(lat2, lon2, lat3, lon3);
+
+    // Smallest angle between two bearings
+    let delta = Math.abs(b2 - b1);
+    if (delta > 180) delta = 360 - delta;
+
+    accumulatedAngle += delta;
+
+    if (!inCurve && accumulatedAngle >= CURVE_THRESHOLD) {
+      // Started a new curve
+      inCurve = true;
+    } else if (inCurve && delta < 2) {
+      // Heading has straightened out — end of curve
+      curves++;
+      inCurve = false;
+      accumulatedAngle = 0;
+    }
+  }
+  // Count an open curve at the end
+  if (inCurve) curves++;
+
+  return curves;
+}
+
+// ─── MAP DRAWING ──────────────────────────────────────────────────
+const COLORS = ['#4A5E3A', '#C4623A', '#7A6B4A'];
+
+function drawRoutes(features) {
+  clearMap();
+
+  const scored = features.map((f, i) => ({ f, i, score: calcScenicScore(f) }))
+    .sort((a, b) => b.score - a.score);
+
+  // Draw routes (best on top)
+  [...scored].reverse().forEach(({ f, i }) => {
+    const coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
+    const isBest = i === scored[0].i;
+    const layer = L.polyline(coords, {
+      color: COLORS[i % COLORS.length],
+      weight: isBest ? 5 : 3.5,
+      opacity: isBest ? 0.9 : 0.5,
+      lineJoin: 'round',
+      lineCap: 'round',
+    }).addTo(map);
+    routeLayers.push(layer);
+  });
+
+  // Add markers
+  const originIcon = L.divIcon({
+    html: `<div style="width:14px;height:14px;background:#C4623A;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+  });
+  const destIcon = L.divIcon({
+    html: `<div style="width:14px;height:14px;background:#4A5E3A;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7], className: ''
+  });
+
+  markers.push(L.marker(originCoord, { icon: originIcon }).addTo(map));
+  markers.push(L.marker(destCoord, { icon: destIcon }).addTo(map));
+
+  // Fit bounds to best route
+  const bestCoords = features[scored[0].i].geometry.coordinates.map(c => [c[1], c[0]]);
+  map.fitBounds(L.latLngBounds(bestCoords), { padding: [60, 60], maxZoom: 13 });
+}
+
+function clearMap() {
+  routeLayers.forEach(l => map.removeLayer(l));
+  markers.forEach(m => map.removeLayer(m));
+  routeLayers = [];
+  markers = [];
+}
+
+// ─── RESULTS UI ───────────────────────────────────────────────────
+const ROUTE_NAMES = ['🌿 Scenic Landstraße', '🌄 Panoramic Route', '⛰️ Mountain Way'];
+const ROUTE_DESCS = ['Maximum curves, minimum highways', 'Longer but beautifully winding', 'Through valleys and hillsides'];
+
+function showResults(features) {
+  const scored = features.map((f, i) => ({ f, i, score: calcScenicScore(f) }))
+    .sort((a, b) => b.score - a.score);
+
+  const container = document.getElementById('routeCards');
+  container.innerHTML = '';
+
+  scored.forEach(({ f, i, score }, rank) => {
+    const summ = f.properties.summary;
+    const distKm = (summ.distance / 1000).toFixed(1);
+    const mins = Math.round(summ.duration / 60);
+    const h = Math.floor(mins / 60), m = mins % 60;
+    const dur = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    const isBest = rank === 0;
+    const curves = countCurves(f);
+    const curvesPerKm = (curves / Math.max(parseFloat(distKm), 1)).toFixed(1);
+
+    const card = document.createElement('div');
+    card.className = `route-card${isBest ? '' : ' alt'}${rank === 0 ? ' selected' : ''}`;
+    card.innerHTML = `
+      ${isBest ? '<div class="scenic-tag">MOST SCENIC</div>' : ''}
+      <div class="card-top">
+        <div class="card-icon">${['🌿','🌄','⛰️'][rank % 3]}</div>
+        <div class="card-meta">
+          <div class="card-name">${ROUTE_NAMES[rank % 3]}</div>
+          <div class="card-desc">${ROUTE_DESCS[rank % 3]}</div>
+        </div>
+      </div>
+      <div class="card-stats">
+        <div class="stat"><span>📏</span><strong>${distKm} km</strong></div>
+        <div class="stat"><span>⏱</span><strong>${dur}</strong></div>
+        <div class="stat"><span>🔄</span><strong>${curves} curves</strong></div>
+        <div class="stat"><span>〰️</span><strong>${curvesPerKm}/km</strong></div>
+      </div>
+      <div class="score-section">
+        <div class="score-row">
+          <span>Scenic Score</span>
+          <span>${score} / 99</span>
+        </div>
+        <div class="score-track">
+          <div class="score-fill" id="fill-${rank}" style="width:0%"></div>
+        </div>
+      </div>
+    `;
+
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.route-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedRouteIdx = i;
+      // Highlight selected route
+      routeLayers.forEach((l, li) => l.setStyle({ opacity: li === i ? 0.9 : 0.4, weight: li === i ? 5 : 3.5 }));
+      const coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
+      map.fitBounds(L.latLngBounds(coords), { padding: [60, 60], maxZoom: 13 });
+    });
+
+    container.appendChild(card);
+    setTimeout(() => {
+      const fill = document.getElementById(`fill-${rank}`);
+      if (fill) fill.style.width = score + '%';
+    }, 200 + rank * 150);
+  });
+
+  document.getElementById('searchPanel').classList.add('hidden');
+  setTimeout(() => document.getElementById('resultsPanel').classList.add('visible'), 80);
+}
+
+function closeResults() {
+  document.getElementById('resultsPanel').classList.remove('visible');
+  document.getElementById('searchPanel').classList.remove('hidden');
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────────
+function openNavigation() {
+  if (!originCoord || !destCoord || !computedRoutes.length) return;
+
+  const route = computedRoutes[selectedRouteIdx];
+  const coords = route.geometry.coordinates; // [lng, lat]
+
+  // Sample up to 16 waypoints evenly by cumulative distance along the route
+  // (distance-weighted so points are spread evenly on the road, not just by index)
+  // Google Maps web URL supports up to 9 waypoints; the app (maps://) supports fewer.
+  // We use the web URL which handles 16 via the waypoints param reliably.
+  const MAX_WP = 16;
+  const waypoints = [];
+  if (coords.length > 2) {
+    // Build cumulative distance array
+    const cumDist = [0];
+    for (let i = 1; i < coords.length; i++) {
+      const [lng1, lat1] = coords[i - 1];
+      const [lng2, lat2] = coords[i];
+      cumDist.push(cumDist[i - 1] + haversineDist(lat1, lng1, lat2, lng2));
+    }
+    const totalDist = cumDist[cumDist.length - 1];
+    // Pick MAX_WP evenly-spaced distance targets between 0 and total
+    for (let w = 1; w <= MAX_WP; w++) {
+      const target = (totalDist * w) / (MAX_WP + 1);
+      // Binary search for the coord closest to this distance target
+      let lo = 0, hi = cumDist.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (cumDist[mid] < target) lo = mid + 1; else hi = mid;
+      }
+      const [lng, lat] = coords[lo];
+      waypoints.push(`${lat.toFixed(5)},${lng.toFixed(5)}`);
+    }
+  }
+
+  const o = originCoord, d = destCoord;
+  const originStr = `${o[0].toFixed(5)},${o[1].toFixed(5)}`;
+  const destStr   = `${d[0].toFixed(5)},${d[1].toFixed(5)}`;
+
+  // Google Maps URL — waypoints force it to follow our scenic route
+  const wpParam = waypoints.length ? `&waypoints=${waypoints.join('|')}` : '';
+  const googleUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}${wpParam}&travelmode=driving`;
+
+  // Apple Maps deep-link (no waypoint support in URL scheme, but native turn-by-turn)
+  const appleUrl = `maps://maps.apple.com/?saddr=${originStr}&daddr=${destStr}&dirflg=d`;
+
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+  if (isIOS) {
+    showNavChoice(appleUrl, googleUrl);
+  } else {
+    window.open(googleUrl, '_blank');
+  }
+}
+
+function showNavChoice(appleUrl, googleUrl) {
+  const existing = document.getElementById('navSheet');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.id = 'navSheet';
+  sheet.style.cssText = `
+    position:fixed;inset:0;z-index:900;
+    background:rgba(26,24,20,0.55);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    display:flex;align-items:flex-end;
+  `;
+
+  const appleEsc = appleUrl.replace(/'/g, "\'");
+  const googleEsc = googleUrl.replace(/'/g, "\'");
+
+  sheet.innerHTML = `
+    <div style="width:100%;background:#F5F0E8;border-radius:22px 22px 0 0;padding:20px 20px calc(env(safe-area-inset-bottom,20px) + 12px);">
+      <div style="width:36px;height:4px;background:rgba(26,24,20,0.18);border-radius:2px;margin:0 auto 20px;"></div>
+      <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#1A1814;margin-bottom:5px;">Open Navigation</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(26,24,20,0.4);margin-bottom:18px;">WITH SCENIC WAYPOINTS</div>
+      <button onclick="window.location.href='${appleEsc}'" style="width:100%;padding:15px;background:#1A1814;color:#F5F0E8;border:none;border-radius:13px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+        🗺️ Apple Maps
+      </button>
+      <button onclick="window.open('${googleEsc}','_blank')" style="width:100%;padding:15px;background:#4A5E3A;color:#F5F0E8;border:none;border-radius:13px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+        🌍 Google Maps <span style="font-size:10px;opacity:0.6;margin-left:4px;">(scenic waypoints)</span>
+      </button>
+      <button onclick="document.getElementById('navSheet').remove()" style="width:100%;padding:13px;background:transparent;border:1.5px solid rgba(26,24,20,0.15);border-radius:13px;font-family:'DM Sans',sans-serif;font-size:14px;color:rgba(26,24,20,0.5);cursor:pointer;">
+        Cancel
+      </button>
+    </div>
+  `;
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('loader').classList.toggle('on', on);
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 4000);
+}
+
+function escH(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escQ(s) { return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ─── AUTO-LOAD KEY ─────────────────────────────────────────────────
+const BUNDLED_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjZhZmMzNDA1NDg0MjQwNDQ4YzAyMDQ2YTA4ZDhjYjQ1IiwiaCI6Im11cm11cjY0In0=';
+
+function onLeafletReady() {
+  orsKey = BUNDLED_KEY;
+  initMap();
+}
+</script>
+<!-- Leaflet JS: loaded last so onLeafletReady is already defined -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onload="onLeafletReady()"></script>
+</body>
+</html>
